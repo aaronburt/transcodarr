@@ -1,3 +1,6 @@
 target
 .git
+.github
+docs
+test
 transcodarr.toml

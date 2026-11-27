@@ -17,6 +17,7 @@ usage:
   transcodarr run      [--config FILE] [--web ADDR]
   transcodarr encode   FILE [--config FILE] [--profile NAME]
   transcodarr profiles [--config FILE]
+  transcodarr --version
 
   --config defaults to transcodarr.toml
   --web    serves a status page, e.g. --web 127.0.0.1:8686
@@ -42,6 +43,10 @@ fn cli(args: Vec<String>) -> Result<()> {
             "--config" | "-c" => config = value()?.into(),
             "--web" => web = Some(value()?),
             "--profile" | "-p" => profile = Some(value()?),
+            "-V" | "--version" => {
+                println!("transcodarr {}", env!("CARGO_PKG_VERSION"));
+                return Ok(());
+            }
             "-h" | "--help" => {
                 println!("{USAGE}");
                 return Ok(());
