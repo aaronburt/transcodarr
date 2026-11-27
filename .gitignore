@@ -1,2 +1,5 @@
 /target
 /transcodarr.toml
+/test/
+/.impeccable/
+*.jsonl
