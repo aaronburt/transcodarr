@@ -1,0 +1,11 @@
+services:
+  transcodarr:
+    build: .
+    image: transcodarr
+    restart: unless-stopped
+    ports:
+      - "8686:8686"
+    volumes:
+      - ./config:/config
+      - ./media/in:/media/in
+      - ./media/out:/media/out

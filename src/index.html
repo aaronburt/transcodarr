@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transcodarr</title>
+<style>
+:root{--bg:#F5F5F3;--ink:#18181B;--muted:#52525B;--ok-bg:#E7F3EC;--ok:#1F5F3A;--ok-dot:#2F7D4F;--card:#FFF;--line:#E4E4E7;--track:#EDEDEB;--accent:#E8590C;--line2:#F0F0EE;--warn:#9A3412;--bad:#B42318;--card2:#FAFAF9;--warn-bg:#FDEBDD;--code:#3F3F46;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#111113;--ink:#F4F4F5;--muted:#A1A1AA;--ok-bg:#14301F;--ok:#6FCF97;--ok-dot:#4ADE80;--card:#1A1A1D;--line:#2E2E33;--track:#2A2A2E;--accent:#FB7A35;--line2:#26262A;--warn:#FDBA74;--bad:#F87171;--card2:#202024;--warn-bg:#3A2414;--code:#D4D4D8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/20px "Segoe UI",system-ui,-apple-system,sans-serif}
+.mono{font-family:inherit;font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.wrap{max-width:1120px;margin:0 auto;padding:32px 16px 48px;display:flex;flex-direction:column;gap:24px}
+header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+h1{margin:0;font-size:22px;line-height:28px;font-weight:700;letter-spacing:-.01em}
+h2{margin:0;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:var(--ok-bg);color:var(--ok);font-weight:500}
+.pill i{width:8px;height:8px;border-radius:50%;background:var(--ok-dot)}
+.pill.off{background:var(--warn-bg);color:var(--warn)}.pill.off i{background:var(--warn)}
+.row{display:flex;flex-wrap:wrap;gap:24px;align-items:stretch}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px}
+.big{font-size:32px;line-height:36px;font-weight:700;letter-spacing:-.02em}
+.bar{height:10px;border-radius:999px;background:var(--track);overflow:hidden}
+.bar div{height:100%;border-radius:999px;background:var(--accent);transition:width .5s}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px}
+.stats div{display:flex;flex-direction:column;gap:2px}.stats span:first-child{font-size:12px;color:var(--muted)}
+.stats span:last-child{font-size:15px;font-weight:500}
+ul{list-style:none;margin:0;padding:0}
+li{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line2)}
+li:last-child{border-bottom:0}
+.name{min-width:0;overflow-wrap:anywhere}
+.tag{flex-shrink:0;font-size:12px;font-weight:500}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+table{width:100%;min-width:640px;border-collapse:collapse}
+th{text-align:left;color:var(--muted);font-size:12px;font-weight:500;padding:8px 12px;border-bottom:1px solid var(--line)}
+td{padding:12px;border-bottom:1px solid var(--line2);vertical-align:top}
+tr:last-child td{border-bottom:0}
+th:first-child,td:first-child{padding-left:0}th:last-child,td:last-child{padding-right:0}
+.r{text-align:right;white-space:nowrap}
+.profile{display:flex;flex-direction:column;gap:6px;padding:12px 16px;border-radius:8px;background:var(--card2);border:1px solid var(--line)}
+.inuse{font-size:12px;font-weight:500;padding:2px 8px;border-radius:999px;background:var(--warn-bg);color:var(--warn)}
+code{font-size:12.5px;color:var(--code);overflow-wrap:anywhere}
+footer{font-size:12px;color:var(--muted);text-align:center}
+button{font:inherit;font-weight:500;min-height:36px;padding:6px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--ink);cursor:pointer}
+button:hover{border-color:var(--muted)}button:disabled{opacity:.5;cursor:default}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.small{min-height:28px;padding:2px 10px;font-size:12px;margin-top:6px}
+textarea{width:100%;min-height:360px;resize:vertical;padding:12px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--ink);font-size:13px;line-height:19px;tab-size:2}
+.actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.pill.err{background:var(--warn-bg);color:var(--bad)}.pill.err i{background:var(--bad)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div style="display:flex;align-items:center;gap:12px">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4-2.5z"/></svg>
+    <h1>Transcodarr</h1>
+  </div>
+  <div class="meta" id="meta"></div>
+</header>
+<div class="row">
+  <section class="card" style="flex:999 1 560px" aria-labelledby="now-h"><h2 id="now-h">Encoding now</h2><div id="now" style="display:flex;flex-direction:column;gap:16px"></div></section>
+  <section class="card" style="flex:1 1 300px" aria-labelledby="wait-h">
+    <div class="head"><h2 id="wait-h">Waiting</h2><span class="muted" id="wait-n" style="font-size:13px"></span></div>
+    <ul id="wait"></ul>
+    <p class="muted" style="margin:0;font-size:12px">Files must stay unchanged for a full scan interval.</p>
+  </section>
+</div>
+<section class="card" aria-labelledby="recent-h">
+  <div class="head"><h2 id="recent-h">Recent</h2><span class="muted" style="font-size:13px">last 20 results</span></div>
+  <div style="overflow-x:auto"><table>
+    <thead><tr><th>Result</th><th>File</th><th>Profile</th><th class="r">Size</th><th class="r">Took</th><th class="r">Finished</th></tr></thead>
+    <tbody id="recent"></tbody>
+  </table></div>
+</section>
+<section class="card" aria-labelledby="prof-h">
+  <div class="head"><h2 id="prof-h">Profiles</h2><span class="muted" style="font-size:13px">from the config file</span></div>
+  <div id="profiles" style="display:flex;flex-direction:column;gap:12px"></div>
+</section>
+<section class="card" id="cfg-card" hidden aria-labelledby="cfg-h">
+  <div class="head"><h2 id="cfg-h">Config</h2><span class="muted mono" id="cfg-path" style="font-size:12px;overflow-wrap:anywhere"></span></div>
+  <p class="muted" style="margin:0;font-size:13px">Saving checks the config and applies it straight away; a bad config is never written. The file is also reloaded on its own when it changes on disk. Changes to <span class="mono">[web]</span> host and port need a restart.</p>
+  <label for="cfg-text" class="muted" style="font-size:12px">File contents</label>
+  <textarea id="cfg-text" class="mono" spellcheck="false" autocomplete="off"></textarea>
+  <div class="actions">
+    <button class="primary" id="cfg-save">Save and reload</button>
+    <button id="cfg-reload">Reload from file</button>
+    <button id="cfg-revert">Discard changes</button>
+    <span id="cfg-msg" role="status" style="font-size:13px"></span>
+  </div>
+</section>
+<footer>Live over a WebSocket at <span class="mono">/ws</span></footer>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const bytes = n => { if (n == null) return "—"; const u = ["B","KB","MB","GB","TB"]; let i = 0; while (n >= 1000 && i < 4) { n /= 1000; i++; } return (i ? n.toFixed(1) : n) + " " + u[i]; };
+const clock = s => { s = Math.round(s); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = String(s % 60).padStart(2, "0"); return h ? `${h}:${String(m).padStart(2, "0")}:${x}` : `${m}:${x}`; };
+const CHECK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+const CROSS = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+const tag = (cls, icon, label) => `<span class="${cls}" style="display:inline-flex;align-items:center;gap:6px;font-weight:500">${icon}${label}</span>`;
+const SKIP = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+const RESULTS = { done: tag("ok", CHECK, "Done"), failed: tag("bad", CROSS, "Failed"), skipped: tag("muted", SKIP, "Skipped"), retried: tag("muted", SKIP, "Retrying") };
+const STATES = { ready: ["ok", "Ready"], copying: ["warn", "Waiting for stable file"], exists: ["muted", "Output exists"], retry: ["warn", "Waiting to retry"], reserved: ["muted", "Earlier job in progress"] };
+
+function render(s) {
+  canEdit = s.can_edit;
+  $("meta").innerHTML = (s.config_error ? `<span class="pill err" title="${esc(s.config_error)}"><i></i>Config not reloaded: ${esc(s.config_error.split("\n")[0])}</span>` : "") + `<span class="pill"><i></i>Watching</span><span class="mono" style="overflow-wrap:anywhere">${esc(s.input)}</span><span aria-hidden="true">·</span><span>scan every ${s.scan_secs} s, ${s.idle_secs} s when idle</span><span aria-hidden="true">·</span><span>profile <strong style="color:var(--ink)">${esc(s.profile)}</strong> (${esc(s.encoders[s.profile])})${Object.entries(s.folders).map(([f, p]) => `, ${esc(f)}/ <strong style="color:var(--ink)">${esc(p)}</strong> (${esc(s.encoders[p])})`).join("")}</span><span aria-hidden="true">·</span><span title="${esc(s.hardware.encoders.length ? "ffmpeg hardware encoders: " + s.hardware.encoders.join(", ") : "ffmpeg has no hardware encoders")}">GPU ${s.hardware.gpus.length ? `<strong style="color:var(--ink)">${esc(s.hardware.gpus.join(", "))}</strong>` : "none detected"}</span>`;
+
+  $("now-h").textContent = s.jobs > 1 ? `Encoding now · ${s.current.length} of ${s.jobs} jobs` : "Encoding now";
+  $("now").innerHTML = s.current.length ? s.current.map(c => {
+    const pct = Math.floor(c.percent), speed = parseFloat(c.speed);
+    const left = speed > 0 && c.duration_secs ? `about ${Math.ceil((c.duration_secs - c.position_secs) / speed / 60)} min left` : "";
+    return `<div style="display:flex;flex-direction:column;gap:16px">
+      <div><div style="font-size:18px;line-height:26px;font-weight:600;overflow-wrap:anywhere">${esc(c.file)}</div>
+      <div class="muted" style="font-size:13px">${esc(c.from_ext)} → ${esc(c.to_ext)} · profile ${esc(c.profile)} (${esc(s.encoders[c.profile] || "")}) · ${bytes(c.size_in)} in</div></div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="big">${pct}%</span><span class="muted" style="font-size:13px">${left}</span></div>
+        <div class="bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Encode progress for ${esc(c.file)}"><div style="width:${c.percent}%"></div></div>
+      </div>
+      <div class="stats">
+        <div><span>Speed</span><span class="mono">${esc(c.speed.replace("x", "×")) || "—"}</span></div>
+        <div><span>fps</span><span class="mono">${esc(c.fps) || "—"}</span></div>
+        <div><span>Elapsed</span><span class="mono">${clock(c.elapsed_secs)}</span></div>
+        <div><span>Position</span><span class="mono">${clock(c.position_secs)} / ${c.duration_secs ? clock(c.duration_secs) : "?"}</span></div>
+      </div></div>`;
+  }).join('<hr style="border:0;border-top:1px solid var(--line2);margin:8px 0">')
+    : '<p class="muted" style="margin:0">Nothing right now.</p>';
+
+  $("wait-n").textContent = s.waiting.length === 1 ? "1 file" : `${s.waiting.length} files`;
+  $("wait").innerHTML = s.waiting.length ? s.waiting.map(w => { const [cls, label] = STATES[w.state]; return `<li><span class="name">${esc(w.file)}</span><span class="tag ${cls}">${label}</span></li>`; }).join("")
+    : '<li class="muted">Nothing waiting.</li>';
+
+  $("recent").innerHTML = s.recent.length ? s.recent.map(r => `<tr>
+    <td>${RESULTS[r.result]}</td>
+    <td><div>${esc(r.file)}</div>${r.note ? `<div class="muted" style="font-size:12px">${esc(r.note)}${r.log ? ` · see <span class="mono" style="overflow-wrap:anywhere">${esc(r.log)}</span>` : ""}</div>` : ""}${r.result === "failed" && s.can_edit ? `<button class="small" data-retry="${r.id}" aria-label="Retry ${esc(r.file)}">Retry</button>` : ""}</td>
+    <td class="mono" style="font-size:13px">${esc(r.profile)}</td>
+    <td class="r mono" style="font-size:13px">${r.result === "done" ? `${bytes(r.size_in)} → ${bytes(r.size_out)}` : "—"}</td>
+    <td class="r mono" style="font-size:13px">${clock(r.took_secs)}</td>
+    <td class="r muted">${new Date(r.finished_at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</td></tr>`).join("")
+    : '<tr><td colspan="6" class="muted">No results yet.</td></tr>';
+
+  $("profiles").innerHTML = Object.entries(s.profiles).map(([name, p]) => `<div class="profile">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:600">${esc(name)}</span><span class="muted" style="font-size:12px">${esc(s.encoders[name])} → .${esc(p.ext)}</span>${name === s.profile || Object.values(s.folders).includes(name) ? '<span class="inuse">In use</span>' : ""}${p.skip_codecs ? `<span class="muted" style="font-size:12px">skips ${esc(p.skip_codecs.join(", "))}</span>` : ""}</div>
+    <code class="mono">${(p.input_args ? esc(p.input_args.join(" ")) + " -i … " : "") + esc(p.args.join(" "))}</code></div>`).join("");
+
+  $("cfg-card").hidden = !s.can_edit;
+  $("cfg-path").textContent = s.config_path;
+  if (s.can_edit && !loaded) loadConfig();
+}
+
+let canEdit = false, loaded = false, saved = "";
+const msg = (text, cls = "muted") => { $("cfg-msg").className = cls; $("cfg-msg").textContent = text; };
+async function api(method, path, body) {
+  const r = await fetch(path, { method, body, headers: { "X-Transcodarr": "1" } });
+  const text = await r.text();
+  if (!r.ok) throw new Error(text);
+  return text;
+}
+async function loadConfig() {
+  loaded = true;
+  try { saved = $("cfg-text").value = await api("GET", "/api/config"); msg(""); }
+  catch (e) { msg(e.message, "bad"); }
+}
+$("cfg-text").addEventListener("input", () => msg($("cfg-text").value === saved ? "" : "Unsaved changes", "warn"));
+$("cfg-save").onclick = async () => {
+  const text = $("cfg-text").value;
+  try { msg(await api("POST", "/api/config", text), "ok"); saved = text; }
+  catch (e) { msg(e.message, "bad"); }
+};
+$("cfg-reload").onclick = async () => {
+  try { await api("POST", "/api/reload"); await loadConfig(); msg("Reloaded", "ok"); }
+  catch (e) { msg(e.message, "bad"); }
+};
+$("cfg-revert").onclick = () => { $("cfg-text").value = saved; msg(""); };
+$("recent").addEventListener("click", async e => {
+  const id = e.target.dataset?.retry;
+  if (!id) return;
+  e.target.disabled = true;
+  try { await api("POST", "/api/retry", id); } catch (err) { e.target.textContent = err.message; }
+});
+
+function connect() {
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onmessage = e => render(JSON.parse(e.data));
+  ws.onclose = () => {
+    $("meta").innerHTML = '<span class="pill off"><i></i>Not reachable</span>';
+    setTimeout(connect, 2000);
+  };
+}
+connect();
+</script>
+</body>
+</html>
