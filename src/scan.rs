@@ -221,7 +221,7 @@ fn process(
                     "output": dest.path,
                     "profile": w.profile,
                     "input_args": profile.input_args,
-                    "args": profile.args,
+                    "args": profile.args.iter().cloned().chain(source.audio_args(profile)).collect::<Vec<_>>(),
                     "source": source,
                 }),
             );
