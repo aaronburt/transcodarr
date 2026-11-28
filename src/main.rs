@@ -10,6 +10,11 @@ use std::path::{Path, PathBuf};
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
+const VERSION: &str = match option_env!("TRANSCODARR_VERSION") {
+    Some(v) if !v.is_empty() => v,
+    _ => env!("CARGO_PKG_VERSION"),
+};
+
 const USAGE: &str = "\
 transcodarr: watch a folder and transcode new videos with ffmpeg
 
@@ -44,7 +49,7 @@ fn cli(args: Vec<String>) -> Result<()> {
             "--web" => web = Some(value()?),
             "--profile" | "-p" => profile = Some(value()?),
             "-V" | "--version" => {
-                println!("transcodarr {}", env!("CARGO_PKG_VERSION"));
+                println!("transcodarr {VERSION}");
                 return Ok(());
             }
             "-h" | "--help" => {

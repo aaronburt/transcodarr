@@ -2,6 +2,7 @@ FROM rust:1-slim-trixie AS build
 WORKDIR /src
 COPY Cargo.toml Cargo.lock rustfmt.toml ./
 COPY src src
+ARG TRANSCODARR_VERSION
 RUN cargo build --release --locked
 
 FROM debian:trixie-slim
