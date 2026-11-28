@@ -46,13 +46,15 @@ docker compose -f compose.yaml -f compose.nvidia.yaml up -d
 The page and the startup log show the GPU that was found and the encoder each profile uses. If an NVENC profile runs
 without a GPU, the error says so and the file stays queued.
 
-Images are published to `ghcr.io/aaronburt/transcodarr` for `linux/amd64` and `linux/arm64`, tagged `latest`, the
-version (`0.1.0`) and the minor version (`0.1`).
+Images are published to `ghcr.io/aaronburt/transcodarr` for `linux/amd64` and `linux/arm64`. `latest`, the
+version (`0.1.0`) and the minor version (`0.1`) are stable releases. `edge` is rebuilt from `main` after every merge
+that passes CI.
 
 ### Binary
 
 Download the archive for your system from the [latest release](https://github.com/aaronburt/transcodarr/releases/latest)
-(Linux x86_64 and arm64, Windows x86_64, macOS Apple silicon). It needs `ffmpeg` and `ffprobe` on the `PATH`, or
+(Linux x86_64 and arm64, Windows x86_64, macOS Apple silicon). The [edge prerelease](https://github.com/aaronburt/transcodarr/releases/tag/edge)
+has the same builds from the newest `main`. It needs `ffmpeg` and `ffprobe` on the `PATH`, or
 set in the config.
 
 ```sh
@@ -200,9 +202,11 @@ cargo test --locked
 The watcher tests need `ffmpeg` and `ffprobe` on the `PATH`, with the libx264 and libx265 encoders. CI runs all of
 this on every push and pull request.
 
-To release, bump `version` in `Cargo.toml`, add the version to `CHANGELOG.md`, and push a tag such as `v0.1.0`. The
-release workflow builds the binaries, attaches them to a GitHub release with the changelog entry, and pushes the
-Docker image.
+Every merge to `main` that passes CI builds the binaries into the `edge` prerelease and pushes the `edge` image.
+
+To make a stable release, bump `version` in `Cargo.toml`, add the version to `CHANGELOG.md`, and push a tag such as
+`v0.1.0`. The same workflow builds the binaries, attaches them to a GitHub release with the changelog entry, and
+pushes the versioned and `latest` images.
 
 ## License
 

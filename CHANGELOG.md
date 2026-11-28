@@ -16,5 +16,6 @@ First release.
 - GPU detection with NVENC, QSV and VAAPI encoder listing.
 - Docker image with ffmpeg and an optional NVIDIA compose override.
 - `run`, `encode`, `profiles` and `--version` commands.
+- Release binaries and Docker images for tagged versions, plus an `edge` build after every merge to `main`.
 
 [0.1.0]: https://github.com/aaronburt/transcodarr/releases/tag/v0.1.0
