@@ -1,28 +1,64 @@
 name: Release
 
 on:
-  push:
-    tags: ["v*"]
   workflow_run:
     workflows: [CI]
     types: [completed]
     branches: [main]
+  push:
+    tags: ["v*"]
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.event_name }}
-  cancel-in-progress: ${{ github.event_name == 'workflow_run' }}
+  group: release
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
   SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
-  VERSION: ${{ github.event_name == 'push' && github.ref_name || 'edge' }}
 
 jobs:
-  binaries:
+  version:
     if: github.event_name == 'push' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.next.outputs.tag }}
+      number: ${{ steps.next.outputs.number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SHA }}
+          fetch-depth: 0
+      - id: next
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            tag="$GITHUB_REF_NAME"
+          elif git tag --points-at "$SHA" | grep -qE '^v[0-9]+\.[0-9]+$'; then
+            echo "$SHA is already released"
+            exit 0
+          else
+            last=$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
+            if [ -z "$last" ]; then
+              tag=v0.1
+            else
+              major=${last#v}; major=${major%%.*}
+              minor=${last##*.}
+              tag="v$major.$((minor + 1))"
+            fi
+          fi
+          if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::$tag is not a vMAJOR.MINOR tag"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "number=${tag#v}" >> "$GITHUB_OUTPUT"
+          echo "Releasing $tag"
+
+  binaries:
+    needs: version
+    if: needs.version.outputs.tag != ''
     strategy:
       matrix:
         include:
@@ -31,6 +67,8 @@ jobs:
           - { os: windows-latest, target: x86_64-pc-windows-msvc }
           - { os: macos-latest, target: aarch64-apple-darwin }
     runs-on: ${{ matrix.os }}
+    env:
+      TRANSCODARR_VERSION: ${{ needs.version.outputs.number }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -42,7 +80,7 @@ jobs:
       - name: Package
         shell: bash
         run: |
-          name="transcodarr-${VERSION}-${{ matrix.target }}"
+          name="transcodarr-${{ needs.version.outputs.tag }}-${{ matrix.target }}"
           mkdir "$name"
           cp README.md LICENSE CHANGELOG.md transcodarr.example.toml "$name/"
           if [[ "${{ matrix.target }}" == *windows* ]]; then
@@ -59,37 +97,9 @@ jobs:
             transcodarr-*.tar.gz
             transcodarr-*.zip
 
-  release:
-    needs: binaries
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    env:
-      GH_TOKEN: ${{ github.token }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.SHA }}
-      - uses: actions/download-artifact@v4
-        with:
-          path: dist
-          merge-multiple: true
-      - run: cd dist && sha256sum * > SHA256SUMS
-      - name: Publish stable release
-        if: github.event_name == 'push'
-        run: |
-          awk -v v="[${VERSION#v}]" '/^## /{p = index($0, v) == 4; next} /^\[/{p = 0} p' CHANGELOG.md > notes.md
-          gh release create "$VERSION" dist/* --title "$VERSION" --notes-file notes.md
-      - name: Publish edge prerelease
-        if: github.event_name == 'workflow_run'
-        run: |
-          gh release delete edge --cleanup-tag --yes || true
-          gh release create edge dist/* --prerelease --latest=false --target "$SHA" \
-            --title "Edge (${SHA::7})" \
-            --notes "Built automatically from \`main\` at ${SHA}. Untested beyond CI; use the latest versioned release for stability."
-
   image:
-    if: github.event_name == 'push' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    needs: version
+    if: needs.version.outputs.tag != ''
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -105,22 +115,37 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}
-          flavor: latest=${{ github.event_name == 'push' }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=edge,enable=${{ github.event_name == 'workflow_run' }}
-          labels: org.opencontainers.image.revision=${{ env.SHA }}
       - uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          build-args: TRANSCODARR_VERSION=${{ needs.version.outputs.number }}
+          tags: |
+            ghcr.io/${{ github.repository }}:${{ needs.version.outputs.number }}
+            ghcr.io/${{ github.repository }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ needs.version.outputs.number }}
+            org.opencontainers.image.revision=${{ env.SHA }}
+            org.opencontainers.image.licenses=AGPL-3.0-only
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  release:
+    needs: [version, binaries, image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ needs.version.outputs.tag }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - run: cd dist && sha256sum * > SHA256SUMS
+      - run: |
+          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --target "$SHA" --title "$TAG" --generate-notes \
+            --notes "Docker: \`ghcr.io/$GITHUB_REPOSITORY:${TAG#v}\`"

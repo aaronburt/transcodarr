@@ -1,8 +1,9 @@
 # Changelog
 
-All notable changes to Transcodarr are listed here. Versions follow [Semantic Versioning](https://semver.org).
+Every merge to `main` is released as the next `MAJOR.MINOR` version. Notes for each release, generated from its
+pull requests, are on the [releases page](https://github.com/aaronburt/transcodarr/releases).
 
-## [0.1.0] - 2026-11-27
+## [0.1] - 2026-11-28
 
 First release.
 
@@ -16,6 +17,6 @@ First release.
 - GPU detection with NVENC, QSV and VAAPI encoder listing.
 - Docker image with ffmpeg and an optional NVIDIA compose override.
 - `run`, `encode`, `profiles` and `--version` commands.
-- Release binaries and Docker images for tagged versions, plus an `edge` build after every merge to `main`.
+- Release binaries and Docker images built automatically for every merge to `main`.
 
-[0.1.0]: https://github.com/aaronburt/transcodarr/releases/tag/v0.1.0
+[0.1]: https://github.com/aaronburt/transcodarr/releases/tag/v0.1
