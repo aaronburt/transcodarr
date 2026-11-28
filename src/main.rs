@@ -24,9 +24,10 @@ usage:
   transcodarr profiles [--config FILE]
   transcodarr --version
 
-  --config defaults to transcodarr.toml
-  --web    serves a status page, e.g. --web 127.0.0.1:8686
-           (or set it in the config's [web] section)";
+  --config         defaults to transcodarr.toml
+  --default-config copies this file to --config first if that doesn't exist
+  --web            serves a status page, e.g. --web 127.0.0.1:8686
+                   (or set it in the config's [web] section)";
 
 fn main() {
     if let Err(e) = cli(std::env::args().skip(1).collect()) {
@@ -37,6 +38,7 @@ fn main() {
 
 fn cli(args: Vec<String>) -> Result<()> {
     let mut config = PathBuf::from("transcodarr.toml");
+    let mut default_config: Option<PathBuf> = None;
     let mut web = None;
     let mut profile = None;
     let mut positional = Vec::new();
@@ -46,6 +48,7 @@ fn cli(args: Vec<String>) -> Result<()> {
         let mut value = || it.next().ok_or_else(|| format!("{arg} needs a value"));
         match arg.as_str() {
             "--config" | "-c" => config = value()?.into(),
+            "--default-config" => default_config = Some(value()?.into()),
             "--web" => web = Some(value()?),
             "--profile" | "-p" => profile = Some(value()?),
             "-V" | "--version" => {
@@ -59,6 +62,14 @@ fn cli(args: Vec<String>) -> Result<()> {
             a if a.starts_with('-') => return Err(format!("unknown option {a}\n\n{USAGE}").into()),
             _ => positional.push(arg),
         }
+    }
+
+    if let Some(default) = default_config
+        && !config.exists()
+    {
+        std::fs::copy(&default, &config)
+            .map_err(|e| format!("can't copy {} to {}: {e}", default.display(), config.display()))?;
+        eprintln!("wrote {} from {}", config.display(), default.display());
     }
 
     match positional.iter().map(String::as_str).collect::<Vec<_>>()[..] {

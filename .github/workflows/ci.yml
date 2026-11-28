@@ -57,4 +57,7 @@ jobs:
           build-args: BINARY=prebuilt
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - run: docker run --rm transcodarr:ci transcodarr --version
+      - run: |
+          docker run --rm transcodarr:ci --version
+          docker run --rm --entrypoint ffprobe transcodarr:ci -version
+          docker run --rm --entrypoint ffmpeg transcodarr:ci -hide_banner -encoders | grep -E 'libx265|hevc_nvenc|av1_nvenc'
