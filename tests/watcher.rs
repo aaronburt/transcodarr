@@ -35,6 +35,10 @@ impl Fixture {
     }
 
     fn clip(&self) {
+        self.clip_with_audio("aac", "aac");
+    }
+
+    fn clip_with_audio(&self, first: &str, second: &str) {
         let output = Command::new("ffmpeg")
             .current_dir(self.0.path())
             .args([
@@ -60,8 +64,10 @@ impl Fixture {
                 "2:a",
                 "-c:v",
                 "mpeg4",
-                "-c:a",
-                "aac",
+                "-c:a:0",
+                first,
+                "-c:a:1",
+                second,
                 "in/clip.mkv",
             ])
             .output()
@@ -114,15 +120,28 @@ fn success(result: Output) -> Output {
     result
 }
 
-fn audio_tracks(path: &Path) -> usize {
+fn audio_codecs(path: &Path) -> Vec<String> {
     let output = success(
         Command::new("ffprobe")
-            .args(["-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0"])
+            .args([
+                "-v",
+                "error",
+                "-select_streams",
+                "a",
+                "-show_entries",
+                "stream=codec_name",
+                "-of",
+                "csv=p=0",
+            ])
             .arg(path)
             .output()
             .unwrap(),
     );
-    String::from_utf8(output.stdout).unwrap().lines().count()
+    String::from_utf8(output.stdout).unwrap().lines().map(String::from).collect()
+}
+
+fn audio_tracks(path: &Path) -> usize {
+    audio_codecs(path).len()
 }
 
 #[test]
@@ -133,6 +152,18 @@ fn example_profiles_preserve_alternate_audio() {
         success(f.cli(&["encode", "in/clip.mkv", "-p", profile]).output().unwrap());
         assert_eq!(audio_tracks(&f.path(&format!("out/clip.{ext}"))), 2);
     }
+}
+
+#[test]
+fn listed_audio_codecs_are_reencoded_per_track() {
+    let f = Fixture::new();
+    f.clip_with_audio("aac", "flac");
+    f.config(
+        "skip_codecs = [\"hevc\", \"av1\"]",
+        "skip_codecs = [\"hevc\", \"av1\"]\naudio_reencode = [\"flac\"]\naudio_args = [\"-c\", \"libopus\", \"-b\", \"96k\"]",
+    );
+    success(f.cli(&["encode", "in/clip.mkv", "-p", "hevc"]).output().unwrap());
+    assert_eq!(audio_codecs(&f.path("out/clip.mkv")), ["aac", "opus"]);
 }
 
 #[test]

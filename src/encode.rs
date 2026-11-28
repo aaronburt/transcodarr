@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::{Config, Profile};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::fmt;
@@ -293,6 +293,7 @@ impl Destination {
             .arg("-i")
             .arg(input)
             .args(&profile.args)
+            .args(source.audio_args(profile))
             .args(["-loglevel", "level+error", "-progress", "pipe:1", "-nostats"])
             .arg(&tmp.0)
             .stdout(Stdio::piped())
@@ -387,6 +388,16 @@ impl Media {
 
     pub fn video_codec(&self) -> Option<&str> {
         self.main_video()?.codec_name.as_deref()
+    }
+
+    pub fn audio_args(&self, profile: &Profile) -> Vec<String> {
+        self.streams
+            .iter()
+            .filter(|s| s.codec_type == "audio")
+            .enumerate()
+            .filter(|(_, s)| profile.reencodes(s.codec_name.as_deref()))
+            .flat_map(|(track, _)| profile.track_audio_args(track))
+            .collect()
     }
 
     fn duration(&self) -> Option<f64> {

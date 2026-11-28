@@ -77,6 +77,13 @@ input_args = ["-hwaccel", "cuda"]
 args = ["-map", "0:V", "-map", "0:a?", "-c:v", "av1_nvenc", "-preset", "p5", "-cq", "30", "-c:a", "copy"]
 ```
 
+Re-encode only heavy audio tracks and copy the rest:
+
+```toml
+audio_reencode = ["truehd", "dts", "flac"]
+audio_args = ["-c", "libopus", "-b", "192k"]
+```
+
 Give a subfolder its own profile:
 
 ```toml

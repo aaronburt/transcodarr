@@ -145,8 +145,8 @@ function render(s) {
     : '<tr><td colspan="6" class="muted">No results yet.</td></tr>';
 
   $("profiles").innerHTML = Object.entries(s.profiles).map(([name, p]) => `<div class="profile">
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:600">${esc(name)}</span><span class="muted" style="font-size:12px">${esc(s.encoders[name])} → .${esc(p.ext)}</span>${name === s.profile || Object.values(s.folders).includes(name) ? '<span class="inuse">In use</span>' : ""}${p.skip_codecs ? `<span class="muted" style="font-size:12px">skips ${esc(p.skip_codecs.join(", "))}</span>` : ""}</div>
-    <code class="mono">${(p.input_args ? esc(p.input_args.join(" ")) + " -i … " : "") + esc(p.args.join(" "))}</code></div>`).join("");
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:600">${esc(name)}</span><span class="muted" style="font-size:12px">${esc(s.encoders[name])} → .${esc(p.ext)}</span>${name === s.profile || Object.values(s.folders).includes(name) ? '<span class="inuse">In use</span>' : ""}${p.skip_codecs ? `<span class="muted" style="font-size:12px">skips ${esc(p.skip_codecs.join(", "))}</span>` : ""}${p.audio_reencode ? `<span class="muted" style="font-size:12px">re-encodes ${esc(p.audio_reencode.join(", "))} audio</span>` : ""}</div>
+    <code class="mono">${(p.input_args ? esc(p.input_args.join(" ")) + " -i … " : "") + esc(p.args.join(" "))}${p.audio_reencode ? `<br>${esc(p.audio_reencode.join(", "))}: ${esc(p.audio_args.join(" "))}` : ""}</code></div>`).join("");
 
   $("cfg-card").hidden = !s.can_edit;
   $("cfg-path").textContent = s.config_path;

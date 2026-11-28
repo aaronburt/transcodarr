@@ -55,6 +55,10 @@ pub struct Profile {
     pub preserve_duration: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub skip_codecs: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub audio_reencode: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub audio_args: Vec<String>,
     #[serde(default)]
     pub ignore_errors: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -123,6 +127,23 @@ impl Profile {
             .find(|w| matches!(w[0].as_str(), "-c:v" | "-codec:v" | "-vcodec"))
             .map_or("ffmpeg default", |w| w[1].as_str())
     }
+
+    pub fn reencodes(&self, codec: Option<&str>) -> bool {
+        codec.is_some_and(|codec| self.audio_reencode.iter().any(|c| c.eq_ignore_ascii_case(codec)))
+    }
+
+    pub fn track_audio_args(&self, track: usize) -> impl Iterator<Item = String> + '_ {
+        self.audio_args.iter().map(move |arg| {
+            if arg.len() > 1
+                && arg.starts_with('-')
+                && arg[1..].starts_with(|c: char| c.is_ascii_alphabetic())
+            {
+                format!("{arg}:a:{track}")
+            } else {
+                arg.clone()
+            }
+        })
+    }
 }
 
 impl Config {
@@ -143,6 +164,11 @@ impl Config {
         }
         if !cfg.output_name.contains("{name}") {
             return Err("output_name must contain {name}, or every file would get the same name".into());
+        }
+        if let Some((name, _)) =
+            cfg.profiles.iter().find(|(_, p)| !p.audio_reencode.is_empty() && p.audio_args.is_empty())
+        {
+            return Err(format!("profile '{name}' has audio_reencode but no audio_args").into());
         }
         for (name, p) in &cfg.profiles {
             if p.min_vmaf.is_some_and(|v| !(0.0..=100.0).contains(&v)) {
@@ -203,5 +229,37 @@ mod tests {
         assert_eq!(cfg.profiles["p"].min_vmaf, Some(93.0));
         assert!(Config::parse(&format!("{BASE}min_vmaf = 120\n")).is_err());
         assert!(Config::parse(&format!("{BASE}vmaf_subsample = 0\n")).is_err());
+    }
+
+    #[test]
+    fn audio_args_target_one_track() {
+        let profile: super::Profile = toml::from_str(
+            r#"ext = "mkv"
+args = []
+audio_reencode = ["truehd", "DTS"]
+audio_args = ["-c", "libopus", "-b", "192k", "-af", "volume=-1dB"]"#,
+        )
+        .unwrap();
+        assert!(
+            profile.reencodes(Some("dts")) && !profile.reencodes(Some("aac")) && !profile.reencodes(None)
+        );
+        let args: Vec<_> = profile.track_audio_args(2).collect();
+        assert_eq!(args, ["-c:a:2", "libopus", "-b:a:2", "192k", "-af:a:2", "volume=-1dB"]);
+    }
+
+    #[test]
+    fn audio_reencode_needs_audio_args() {
+        let err = super::Config::parse(
+            r#"input = "in"
+output = "out"
+profile = "p"
+[profiles.p]
+ext = "mkv"
+args = []
+audio_reencode = ["dts"]"#,
+        )
+        .err()
+        .unwrap();
+        assert!(err.to_string().contains("audio_args"));
     }
 }

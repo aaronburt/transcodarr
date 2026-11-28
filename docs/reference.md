@@ -105,6 +105,24 @@ on the GPU as well as encode there.
 Each profile can also have `skip_codecs`, e.g. `["av1"]`: a file whose video is already in one of those codecs (as
 ffprobe names them) isn't re-encoded, and its original goes straight to done.
 
+Each profile can also re-encode only some audio tracks. List the codecs to replace in `audio_reencode` (as ffprobe
+names them) and the encoder options for those tracks in `audio_args`. Every other track keeps the profile's own
+audio args, usually `-c:a copy`:
+
+```toml
+[profiles.hevc]
+ext = "mkv"
+args = ["-map", "0:V", "-map", "0:a?", "-c:v", "libx265", "-crf", "24", "-c:a", "copy"]
+audio_reencode = ["truehd", "dts", "flac", "pcm_s16le", "pcm_s24le"]
+audio_args = ["-c", "libopus", "-b", "192k"]
+```
+
+A film with a TrueHD main track and an AAC commentary comes out with an Opus main track and the untouched AAC.
+Transcodarr turns `audio_args` into per-track options such as `-c:a:0 libopus -b:a:0 192k`, so write the options
+without a stream specifier. The track numbers follow the source's audio order, so the profile should map every audio
+track (`-map 0:a?` or `-map 0`). libopus can't encode some 5.1 layouts; `["-c", "aac", "-b", "384k"]` is the safer
+choice for surround tracks.
+
 By default a decode error stops the encode and the file moves to failed. Set `ignore_errors = true` on a profile to
 encode through glitches instead, which suits recordings like `.ts` captures. The output is still checked with ffprobe,
 so a file that ends far too short still fails.

@@ -93,6 +93,9 @@ fn cli(args: Vec<String>) -> Result<()> {
             for (name, p) in &cfg.profiles {
                 let mark = if *name == cfg.profile { " (default)" } else { "" };
                 println!("{name}{mark} -> .{}\n  {}", p.ext, p.args.join(" "));
+                if !p.audio_reencode.is_empty() {
+                    println!("  {} audio: {}", p.audio_reencode.join(", "), p.audio_args.join(" "));
+                }
             }
             Ok(())
         }
