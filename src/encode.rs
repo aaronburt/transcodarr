@@ -5,7 +5,7 @@ use std::fmt;
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::SystemTime;
 
@@ -37,6 +37,100 @@ pub struct Progress {
     pub duration_secs: f64,
     pub fps: String,
     pub speed: String,
+    pub stage: &'static str,
+    pub vmaf: Option<f64>,
+}
+
+fn follow(
+    mut child: Child,
+    duration_secs: f64,
+    stage: &'static str,
+    on_progress: &mut impl FnMut(&Progress),
+) -> Result<(ExitStatus, Diagnostics), Error> {
+    let stderr = child.stderr.take().unwrap();
+    let err_thread = std::thread::spawn(move || Diagnostics::read(BufReader::new(stderr)));
+    let mut p = Progress { duration_secs, stage, ..Default::default() };
+    for line in BufReader::new(child.stdout.take().unwrap()).lines().map_while(Result::ok) {
+        let Some((key, val)) = line.split_once('=') else { continue };
+        match key {
+            "out_time_us" | "out_time_ms" => {
+                if let Ok(us) = val.parse::<f64>() {
+                    p.position_secs = us / 1e6;
+                }
+            }
+            "fps" => p.fps = val.to_string(),
+            "speed" => p.speed = val.trim().to_string(),
+            "progress" => {
+                if val == "end" {
+                    p.percent = 100.0;
+                } else if p.duration_secs > 0.0 {
+                    p.percent = (p.position_secs / p.duration_secs * 100.0).clamp(0.0, 100.0);
+                }
+                on_progress(&p);
+            }
+            _ => {}
+        }
+    }
+    let status = child.wait()?;
+    let diagnostics = err_thread.join().map_err(|_| Error::Retry("lost ffmpeg diagnostics".into()))??;
+    Ok((status, diagnostics))
+}
+
+fn vmaf(
+    cfg: &Config,
+    encoded: &Path,
+    source_path: &Path,
+    source: &Media,
+    subsample: u32,
+    on_progress: &mut impl FnMut(&Progress),
+) -> Result<f64, Error> {
+    let video = source.main_video().ok_or_else(|| Error::Media("no video stream found".into()))?;
+    let mut distorted = Vec::new();
+    if let (Some(w), Some(h)) = (video.width, video.height) {
+        distorted.push(format!("scale={w}:{h}:flags=bicubic"));
+    }
+    if let Some(rate) = video.r_frame_rate.as_deref().filter(|r| !r.starts_with('0')) {
+        distorted.push(format!("fps={rate}"));
+    }
+    distorted.push("format=yuv420p,setpts=PTS-STARTPTS".into());
+    let threads = std::thread::available_parallelism().map_or(1, |n| n.get());
+    let graph = format!(
+        "[0:v:0]{}[d];[1:v:0]format=yuv420p,setpts=PTS-STARTPTS[r];[d][r]libvmaf=n_subsample={subsample}:n_threads={threads}",
+        distorted.join(",")
+    );
+    let child = Command::new(&cfg.ffmpeg)
+        .args(["-hide_banner", "-nostdin", "-i"])
+        .arg(encoded)
+        .arg("-i")
+        .arg(source_path)
+        .args([
+            "-lavfi",
+            &graph,
+            "-loglevel",
+            "level+info",
+            "-progress",
+            "pipe:1",
+            "-nostats",
+            "-f",
+            "null",
+            "-",
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| Error::Retry(format!("can't start {}: {e}", cfg.ffmpeg.display())))?;
+    let (status, diagnostics) = follow(child, source.duration().unwrap_or_default(), "vmaf", on_progress)?;
+    let score = diagnostics
+        .tail
+        .iter()
+        .find_map(|line| line.split_once("VMAF score: ").and_then(|(_, v)| v.trim().parse::<f64>().ok()));
+    match score {
+        Some(score) if status.success() => Ok(score),
+        _ if diagnostics.tail.iter().any(|l| l.contains("No such filter: 'libvmaf'")) => {
+            Err(Error::Retry(format!("{} has no libvmaf filter, needed for min_vmaf", cfg.ffmpeg.display())))
+        }
+        _ => Err(diagnostics.failure(format!("VMAF check returned {status}"))),
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -192,7 +286,7 @@ impl Destination {
         self.check_available()?;
         let stamp = Stamp::from(fs::metadata(input)?);
         let tmp = TempOutput::new(&self.work_dir, &profile.ext);
-        let mut child = Command::new(&cfg.ffmpeg)
+        let child = Command::new(&cfg.ffmpeg)
             .args(["-hide_banner", "-nostdin", "-y"])
             .args((!profile.ignore_errors).then_some("-xerror"))
             .args(&profile.input_args)
@@ -207,38 +301,21 @@ impl Destination {
             .spawn()
             .map_err(|e| Error::Retry(format!("can't start {}: {e}", cfg.ffmpeg.display())))?;
 
-        let stderr = child.stderr.take().unwrap();
-        let err_thread = std::thread::spawn(move || Diagnostics::read(BufReader::new(stderr)));
-        let mut p = Progress { duration_secs: source.duration().unwrap_or_default(), ..Default::default() };
-        for line in BufReader::new(child.stdout.take().unwrap()).lines().map_while(Result::ok) {
-            let Some((key, val)) = line.split_once('=') else { continue };
-            match key {
-                "out_time_us" | "out_time_ms" => {
-                    if let Ok(us) = val.parse::<f64>() {
-                        p.position_secs = us / 1e6;
-                    }
-                }
-                "fps" => p.fps = val.to_string(),
-                "speed" => p.speed = val.trim().to_string(),
-                "progress" => {
-                    if val == "end" {
-                        p.percent = 100.0;
-                    } else if p.duration_secs > 0.0 {
-                        p.percent = (p.position_secs / p.duration_secs * 100.0).clamp(0.0, 100.0);
-                    }
-                    on_progress(&p);
-                }
-                _ => {}
-            }
-        }
-        let status = child.wait()?;
-        let diagnostics = err_thread.join().map_err(|_| Error::Retry("lost ffmpeg diagnostics".into()))??;
+        let duration = source.duration().unwrap_or_default();
+        let (status, diagnostics) = follow(child, duration, "encoding", &mut on_progress)?;
         if !status.success() || !profile.ignore_errors && (diagnostics.had_error || diagnostics.bad_input) {
             return Err(diagnostics.failure(format!("ffmpeg returned {status}")));
         }
         let encoded = probe(&cfg.ffprobe, &tmp.0, false)
             .map_err(|e| Error::Retry(format!("can't verify output: {e}")))?;
         let keep_source = source.verify(&encoded, profile.preserve_duration)?;
+        if let Some(min) = profile.min_vmaf {
+            let score = vmaf(cfg, &tmp.0, input, source, profile.vmaf_subsample, &mut on_progress)?;
+            on_progress(&Progress { vmaf: Some(score), ..Default::default() });
+            if score < min {
+                return Err(Error::Media(format!("VMAF {score:.2} is below min_vmaf {min}")));
+            }
+        }
         if Stamp::from(fs::metadata(input)?) != stamp {
             return Err(Error::Retry(format!("{} changed during the encode", input.display())));
         }
@@ -258,6 +335,12 @@ pub struct Media {
 struct Stream {
     codec_name: Option<String>,
     codec_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    width: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    height: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    r_frame_rate: Option<String>,
     duration: Option<String>,
     #[serde(default)]
     tags: DurationTag,
@@ -299,12 +382,12 @@ struct Format {
 }
 
 impl Media {
+    fn main_video(&self) -> Option<&Stream> {
+        self.streams.iter().find(|s| s.codec_type == "video" && s.disposition.attached_pic == 0)
+    }
+
     pub fn video_codec(&self) -> Option<&str> {
-        self.streams
-            .iter()
-            .find(|s| s.codec_type == "video" && s.disposition.attached_pic == 0)?
-            .codec_name
-            .as_deref()
+        self.main_video()?.codec_name.as_deref()
     }
 
     pub fn audio_args(&self, profile: &Profile) -> Vec<String> {
@@ -389,7 +472,7 @@ pub fn probe(tool: &Path, input: &Path, ignore_errors: bool) -> Result<Media, Er
             "-v",
             "level+error",
             "-show_entries",
-            "format=duration:stream=codec_name,codec_type,duration:stream_disposition=attached_pic:stream_tags=DURATION",
+            "format=duration:stream=codec_name,codec_type,width,height,r_frame_rate,duration:stream_disposition=attached_pic:stream_tags=DURATION",
             "-of",
             "json",
         ])

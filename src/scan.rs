@@ -189,6 +189,7 @@ fn process(
         id: 0,
         failed_path: None,
         source_path: None,
+        vmaf: None,
     };
     if path != claimed {
         dest.check_available()?;
@@ -202,6 +203,7 @@ fn process(
     }
 
     let mut ffmpeg_output = None;
+    let mut vmaf = None;
     let outcome = if dest.path.try_exists()? {
         Ok(Completed::Skipped("output already exists, kept the interrupted job's original".into()))
     } else {
@@ -237,15 +239,19 @@ fn process(
                 duration_secs: 0.0,
                 fps: String::new(),
                 speed: String::new(),
+                stage: "encoding",
             });
             dest.encode(cfg, &claimed, &w.profile, &source, |p| {
-                if let Some(c) = status.lock().unwrap().current.iter_mut().find(|c| c.file == file) {
+                if p.vmaf.is_some() {
+                    vmaf = p.vmaf;
+                } else if let Some(c) = status.lock().unwrap().current.iter_mut().find(|c| c.file == file) {
                     c.elapsed_secs = started.elapsed().as_secs();
                     c.percent = p.percent;
                     c.position_secs = p.position_secs;
                     c.duration_secs = p.duration_secs;
                     c.fps.clone_from(&p.fps);
                     c.speed.clone_from(&p.speed);
+                    c.stage = p.stage;
                 }
             })
             .map(Completed::Encoded)
@@ -255,6 +261,7 @@ fn process(
     if Stamp::from(fs::metadata(&claimed)?) != stamp {
         return Err(Error::Retry("input changed during processing".into()));
     }
+    finished.vmaf = vmaf;
     match outcome {
         Ok(Completed::Skipped(reason)) => {
             move_to(&claimed, &w.done)?;
