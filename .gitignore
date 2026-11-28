@@ -3,3 +3,4 @@
 /test/
 /.impeccable/
 *.jsonl
+/dist/
