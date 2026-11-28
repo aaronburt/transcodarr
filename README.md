@@ -28,6 +28,8 @@ curl -O https://raw.githubusercontent.com/aaronburt/transcodarr/main/compose.yam
 docker compose up -d
 ```
 
+This pulls `ghcr.io/aaronburt/transcodarr:latest`. To update, run `docker compose pull && docker compose up -d`.
+
 On first start it writes `config/transcodarr.toml` (default profile `hevc`, libx265) and serves the status page on
 [localhost:8686](http://localhost:8686). Put videos in `media/in`; encodes land in `media/out`.
 
@@ -48,6 +50,13 @@ docker compose -f compose.yaml -f compose.nvidia.yaml up -d
 
 The page and the startup log show the GPU that was found and the encoder each profile uses. If an NVENC profile runs
 without a GPU, the error says so and the file stays queued.
+
+To build the image from your own checkout instead of pulling it, add `compose.build.yaml` (it also works alongside
+`compose.nvidia.yaml`):
+
+```sh
+docker compose -f compose.yaml -f compose.build.yaml up -d --build
+```
 
 Images are published to `ghcr.io/aaronburt/transcodarr` for `linux/amd64` and `linux/arm64`, tagged with each
 version (such as `0.1`) and `latest`.
