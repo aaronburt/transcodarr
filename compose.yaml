@@ -1,7 +1,6 @@
 services:
   transcodarr:
     image: ghcr.io/aaronburt/transcodarr:latest
-    build: .
     restart: unless-stopped
     ports:
       - "8686:8686"

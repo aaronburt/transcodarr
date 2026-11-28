@@ -1,0 +1,4 @@
+services:
+  transcodarr:
+    image: transcodarr:local
+    build: .
