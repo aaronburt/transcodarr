@@ -92,7 +92,7 @@ jobs:
           fi
       - uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.target }}
+          name: bin-${{ matrix.target }}
           path: |
             transcodarr-*.tar.gz
             transcodarr-*.zip
@@ -144,6 +144,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           path: dist
+          pattern: bin-*
           merge-multiple: true
       - run: cd dist && sha256sum * > SHA256SUMS
       - run: |
