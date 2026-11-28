@@ -109,6 +109,26 @@ By default a decode error stops the encode and the file moves to failed. Set `ig
 encode through glitches instead, which suits recordings like `.ts` captures. The output is still checked with ffprobe,
 so a file that ends far too short still fails.
 
+### Quality check (VMAF)
+
+Set `min_vmaf` on a profile to compare each encode with its original, frame by frame, using ffmpeg's `libvmaf`
+filter. VMAF scores from 0 to 100; around 93 and up is usually hard to tell from the source. An encode that scores
+below `min_vmaf` is thrown away, and the original moves to `failed/` with the score in its `.log`. The score is shown
+in the page's Recent table and recorded as `vmaf` in the event log.
+
+```toml
+[profiles.hevc]
+ext = "mkv"
+args = ["-map", "0:V", "-map", "0:a?", "-c:v", "libx265", "-crf", "24", "-c:a", "copy"]
+min_vmaf = 93
+vmaf_subsample = 10
+```
+
+`vmaf_subsample` (default 10) scores one frame in every 10, which is close to the full score and much faster; set it
+to 1 to score every frame. The encode is scaled back to the original's size and frame rate before comparing. The
+check runs on the CPU after the encode, even for GPU profiles, and needs an ffmpeg built with libvmaf (the Docker
+image's is). Leave `min_vmaf` out for profiles that crop, trim or change the picture on purpose.
+
 Profiles default to `preserve_duration = true`. Set it to `false` on profiles that intentionally trim or speed up a
 video. Transcodarr then accepts the changed duration and keeps the source. The example profiles map every audio
 track. The Matroska profiles also map subtitles and attachments.
@@ -121,7 +141,7 @@ With `log_file` set, `run` appends one JSON object per line. Each has `time` (Un
 | --- | --- |
 | `started` | `watches` (folder, profile and output paths), `jobs`, `scan_secs`, `idle_secs` |
 | `encode_started` | `file`, `input`, `output`, `profile`, `input_args`, `args`, and `source` (what ffprobe found) |
-| `finished` | `result` (`done`, `failed` or `skipped`), sizes, `took_secs`, `note`, `input`, `output`, and `ffmpeg_output` (the last 40 lines of ffmpeg's output) when it failed |
+| `finished` | `result` (`done`, `failed` or `skipped`), sizes, `took_secs`, `note`, `vmaf` (the score, when `min_vmaf` is set), `input`, `output`, and `ffmpeg_output` (the last 40 lines of ffmpeg's output) when it failed |
 | `queued_for_retry` | `file`, `error` (a tool or disk problem, tried again later) |
 | `config_reloaded`, `config_error` | `error` when the new config was rejected |
 | `retry_requested` | `file`, when Retry was pressed on the web page |
@@ -149,7 +169,8 @@ cargo clippy --all-targets -- -D warnings
 cargo test --locked
 ```
 
-The watcher tests need `ffmpeg` and `ffprobe` on the `PATH`, with the libx264 and libx265 encoders. CI runs all of
+The watcher tests need `ffmpeg` and `ffprobe` on the `PATH`, with the libx264 and libx265 encoders. The VMAF test
+is skipped when that ffmpeg has no libvmaf; CI also checks VMAF with the Docker image's ffmpeg. CI runs all of
 this on every push and pull request.
 
 Every merge to `main` that passes CI is released automatically. The version is `MAJOR.MINOR`, and the minor number

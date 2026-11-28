@@ -344,3 +344,39 @@ fn an_output_created_during_encoding_is_never_overwritten() {
     assert_eq!(fs::read(f.path("out/clip.mkv")).unwrap(), b"other producer");
     assert_eq!(audio_tracks(&f.path("in/done/clip.mkv")), 2);
 }
+
+fn has_libvmaf() -> bool {
+    let output = Command::new("ffmpeg").args(["-hide_banner", "-filters"]).output().unwrap();
+    let found = String::from_utf8_lossy(&output.stdout).contains(" libvmaf ");
+    if !found {
+        eprintln!("skipped: this ffmpeg has no libvmaf filter");
+    }
+    found
+}
+
+#[test]
+fn encode_below_min_vmaf_is_discarded_and_the_original_fails() {
+    if !has_libvmaf() {
+        return;
+    }
+    let f = Fixture::new();
+    f.clip();
+    f.config("skip_codecs = [\"hevc\", \"av1\"]", "skip_codecs = [\"hevc\", \"av1\"]\nmin_vmaf = 60");
+    let passed = success(f.cli(&["encode", "in/clip.mkv"]).output().unwrap());
+    assert!(String::from_utf8_lossy(&passed.stderr).contains("VMAF "));
+    fs::remove_file(f.path("out/clip.mkv")).unwrap();
+
+    f.config("min_vmaf = 60", "min_vmaf = 99.9\nvmaf_subsample = 1");
+    f.config("\"-crf\", \"24\"", "\"-crf\", \"51\", \"-vf\", \"scale=64:48\"");
+    let mut watcher = f.watch();
+    let log = f.path("transcodarr.jsonl");
+    watcher.until(|| fs::read_to_string(&log).unwrap_or_default().contains("\"finished\""));
+    let finished: serde_json::Value =
+        serde_json::from_str(fs::read_to_string(&log).unwrap().lines().last().unwrap()).unwrap();
+    assert_eq!(finished["result"], "failed");
+    let score = finished["vmaf"].as_f64().unwrap();
+    assert!(score < 99.9);
+    assert!(finished["note"].as_str().unwrap().contains("below min_vmaf"));
+    assert!(fs::read_to_string(f.path("in/failed/clip.mkv.log")).unwrap().contains("VMAF"));
+    assert!(!f.path("out/clip.mkv").exists());
+}

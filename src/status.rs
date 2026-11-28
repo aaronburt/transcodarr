@@ -151,6 +151,7 @@ pub struct Current {
     pub duration_secs: f64,
     pub fps: String,
     pub speed: String,
+    pub stage: &'static str,
 }
 
 #[derive(Serialize)]
@@ -171,6 +172,7 @@ pub struct Finished {
     pub finished_at: u64,
     pub note: Option<String>,
     pub log: Option<String>,
+    pub vmaf: Option<f64>,
     #[serde(skip)]
     pub failed_path: Option<PathBuf>,
     #[serde(skip)]

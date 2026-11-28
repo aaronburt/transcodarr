@@ -61,3 +61,9 @@ jobs:
           docker run --rm transcodarr:ci --version
           docker run --rm --entrypoint ffprobe transcodarr:ci -version
           docker run --rm --entrypoint ffmpeg transcodarr:ci -hide_banner -encoders | grep -E 'libx265|hevc_nvenc|av1_nvenc'
+          mkdir -p vmaf && chmod 777 vmaf
+          docker run --rm -v "$PWD/vmaf:/w" -w /w --entrypoint ffmpeg transcodarr:ci -v error -f lavfi -i testsrc2=size=320x240:rate=25:duration=2 -c:v mpeg4 -q:v 2 in.mkv
+          printf 'input = "/w"\noutput = "/w/out"\nprofile = "good"\n[profiles.good]\next = "mkv"\nargs = ["-c:v", "libx264", "-crf", "18"]\nmin_vmaf = 80\n[profiles.bad]\next = "mp4"\nargs = ["-c:v", "libx264", "-crf", "51"]\nmin_vmaf = 99\n' > vmaf/c.toml
+          docker run --rm -v "$PWD/vmaf:/w" transcodarr:ci encode /w/in.mkv --config /w/c.toml
+          if docker run --rm -v "$PWD/vmaf:/w" transcodarr:ci encode /w/in.mkv --config /w/c.toml -p bad; then exit 1; fi
+          test -f vmaf/out/in.mkv && test ! -e vmaf/out/in.mp4

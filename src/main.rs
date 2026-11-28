@@ -108,8 +108,11 @@ fn encode_one(file: &Path, cfg: &Config, profile_name: &str) -> Result<()> {
     let dest = encode::Destination::reserve(cfg, file, &cfg.output, profile_name)?;
     dest.check_available()?;
     let source = encode::probe(&cfg.ffprobe, file, profile.ignore_errors)?;
-    dest.encode(cfg, file, profile_name, &source, |p| {
-        eprint!("\r{:5.1}%  {}x  {} fps   ", p.percent, p.speed.trim_end_matches('x'), p.fps);
+    dest.encode(cfg, file, profile_name, &source, |p| match p.vmaf {
+        Some(score) => eprint!("\nVMAF {score:.2} "),
+        None => {
+            eprint!("\r{} {:5.1}%  {}x  {} fps   ", p.stage, p.percent, p.speed.trim_end_matches('x'), p.fps)
+        }
     })?;
     eprintln!("\nwrote {}", dest.path.display());
     Ok(())

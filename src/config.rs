@@ -57,6 +57,10 @@ pub struct Profile {
     pub skip_codecs: Vec<String>,
     #[serde(default)]
     pub ignore_errors: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min_vmaf: Option<f64>,
+    #[serde(default = "default_vmaf_subsample")]
+    pub vmaf_subsample: u32,
 }
 
 #[derive(Clone)]
@@ -94,6 +98,10 @@ fn default_ffmpeg() -> PathBuf {
 
 fn default_ffprobe() -> PathBuf {
     "ffprobe".into()
+}
+
+fn default_vmaf_subsample() -> u32 {
+    10
 }
 
 fn default_true() -> bool {
@@ -136,6 +144,14 @@ impl Config {
         if !cfg.output_name.contains("{name}") {
             return Err("output_name must contain {name}, or every file would get the same name".into());
         }
+        for (name, p) in &cfg.profiles {
+            if p.min_vmaf.is_some_and(|v| !(0.0..=100.0).contains(&v)) {
+                return Err(format!("profile {name}: min_vmaf must be between 0 and 100").into());
+            }
+            if p.vmaf_subsample == 0 {
+                return Err(format!("profile {name}: vmaf_subsample must be at least 1").into());
+            }
+        }
         if cfg.jobs == 0 {
             return Err("jobs must be at least 1".into());
         }
@@ -168,5 +184,24 @@ impl Config {
             let known: Vec<_> = self.profiles.keys().map(String::as_str).collect();
             format!("no profile named '{name}' (have: {})", known.join(", ")).into()
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Config;
+
+    const BASE: &str =
+        "input = \"in\"\noutput = \"out\"\nprofile = \"p\"\n[profiles.p]\next = \"mkv\"\nargs = []\n";
+
+    #[test]
+    fn vmaf_settings() {
+        let cfg = Config::parse(BASE).unwrap();
+        assert_eq!(cfg.profiles["p"].min_vmaf, None);
+        assert_eq!(cfg.profiles["p"].vmaf_subsample, 10);
+        let cfg = Config::parse(&format!("{BASE}min_vmaf = 93\nvmaf_subsample = 1\n")).unwrap();
+        assert_eq!(cfg.profiles["p"].min_vmaf, Some(93.0));
+        assert!(Config::parse(&format!("{BASE}min_vmaf = 120\n")).is_err());
+        assert!(Config::parse(&format!("{BASE}vmaf_subsample = 0\n")).is_err());
     }
 }

@@ -84,6 +84,13 @@ Give a subfolder its own profile:
 anime = "av1"
 ```
 
+Throw away encodes that look too different from the original:
+
+```toml
+[profiles.hevc]
+min_vmaf = 93
+```
+
 Originals move to `done/` or `failed/` in the input folder. Every option is in the
 [reference](docs/reference.md#config) and [`transcodarr.example.toml`](transcodarr.example.toml).
 
