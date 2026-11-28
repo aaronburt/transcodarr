@@ -17,7 +17,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
-      - run: rustup toolchain install stable --profile minimal --component rustfmt,clippy && rustup default stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --locked -- -D warnings
@@ -27,7 +26,6 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
-      - run: rustup toolchain install stable --profile minimal --component clippy && rustup default stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked --bins
@@ -43,10 +41,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - run: rustup target add x86_64-unknown-linux-musl
+      - uses: Swatinem/rust-cache@v2
+      - run: |
+          cargo build --release --locked --target x86_64-unknown-linux-musl
+          mkdir -p dist/amd64
+          cp target/x86_64-unknown-linux-musl/release/transcodarr dist/amd64/
       - uses: docker/setup-buildx-action@v4
       - uses: docker/build-push-action@v7
         with:
           context: .
           push: false
+          load: true
+          tags: transcodarr:ci
+          build-args: BINARY=prebuilt
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - run: docker run --rm transcodarr:ci transcodarr --version
