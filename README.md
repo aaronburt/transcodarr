@@ -34,9 +34,12 @@ On first start it writes `config/transcodarr.toml` (default profile `hevc`, libx
 The image runs as root, so its files are owned by root. To keep your own ownership, add `user: "1000:1000"` (your
 uid and gid) to the service and make sure `config/` and `media/` belong to that user.
 
-The image has ffmpeg with NVENC support built in, but encodes on the CPU by default, so it runs on any machine. To
-use an NVIDIA card, install the NVIDIA Container Toolkit on the host, start with the GPU passed in, and pick the
-`av1` profile (or any NVENC profile) in the config:
+The image is [distroless](https://github.com/GoogleContainerTools/distroless): just Transcodarr, a self-contained ffmpeg and
+ffprobe 9.0 from [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) (x264, x265, SVT-AV1 and NVENC), and
+glibc. There is no shell or package manager inside it. To run ffmpeg in it, use `docker run --entrypoint ffmpeg ...`.
+
+It encodes on the CPU by default, so it runs on any machine. To use an NVIDIA card, install the NVIDIA Container
+Toolkit on the host, start with the GPU passed in, and pick the `av1` profile (or any NVENC profile) in the config:
 
 ```sh
 curl -O https://raw.githubusercontent.com/aaronburt/transcodarr/main/compose.nvidia.yaml
@@ -209,3 +212,7 @@ new major version, push a tag such as `v1.0` on `main`; the next merges become `
 
 [AGPL-3.0](LICENSE). You can use, change and share Transcodarr freely. If you share a modified version, or run one
 for other people over a network, you have to make its source available under the same license.
+
+The Docker image also contains ffmpeg and ffprobe built by BtbN/FFmpeg-Builds under the GPL. The exact build is
+pinned in the `Dockerfile`, and its source is the matching FFmpeg commit together with the build scripts in that
+repository.
